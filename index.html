@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>السوري POS</title>
+    <title>  السوريPOS</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -103,7 +103,7 @@
                     <i class="fa-solid fa-store"></i>
                 </div>
                 <h2 class="text-2xl font-bold text-gray-800">تسجيل الدخول للنظام</h2>
-                <p class="text-xs text-gray-500 mt-1">نظام إدارة ومبيعات البطاطس POS</p>
+                <p class="text-xs text-gray-500 mt-1">السوري POS</p>
             </div>
 
             <form onsubmit="handleLogin(event)" class="space-y-4">
@@ -585,7 +585,7 @@
 
     <!-- Footer -->
     <footer class="bg-white border-t border-gray-200 py-4 text-center text-xs text-gray-500">
-        <p>نظام مبيعات البطاطس POS &copy; 2026 - نظام محلي وسحابي آمن</p>
+        <p>نظام مبيعات البطاطس POS © 2026 - نظام محلي وسحابي آمن</p>
     </footer>
 
     <!-- MODALS -->
@@ -858,7 +858,6 @@
                 });
             }
 
-            // التحقق من حالة تسجيل الدخول المحفوظة مسبقاً
             const savedUser = localStorage.getItem('pot_current_user');
             if (savedUser) {
                 try {
@@ -967,6 +966,7 @@
             } catch (err) {
                 console.warn("Local data save warning:", err);
             }
+            // دفع البيانات للسحابة فوراً في الخلفية إن وجد إنترنت
             pushToFirebase();
         }
 
@@ -980,27 +980,72 @@
             return fullUrl;
         }
 
+        // دمج ذكي للبيانات لمنع فقدان المبيعات المسجلة أوفلاين
+        function mergeWithCloudData(cloudData) {
+            if (!cloudData) return;
+
+            // دمج المبيعات بدون تكرار (بناءً على ID الفاتورة)
+            if (cloudData.sales && Array.isArray(cloudData.sales)) {
+                const existingIds = new Set(window.appState.sales.map(s => s.id));
+                cloudData.sales.forEach(cloudSale => {
+                    if (!existingIds.has(cloudSale.id)) {
+                        window.appState.sales.push(cloudSale);
+                    }
+                });
+            }
+
+            // دمج المصروفات
+            if (cloudData.expenses && Array.isArray(cloudData.expenses)) {
+                const existingExpIds = new Set(window.appState.expenses.map(e => e.id));
+                cloudData.expenses.forEach(cloudExp => {
+                    if (!existingExpIds.has(cloudExp.id)) {
+                        window.appState.expenses.push(cloudExp);
+                    }
+                });
+            }
+
+            // دمج التحصيلات
+            if (cloudData.collections && Array.isArray(cloudData.collections)) {
+                const existingColIds = new Set(window.appState.collections.map(c => c.id));
+                cloudData.collections.forEach(cloudCol => {
+                    if (!existingColIds.has(cloudCol.id)) {
+                        window.appState.collections.push(cloudCol);
+                    }
+                });
+            }
+
+            // تحديث العملاء والأصناف إذا كانت السحابة تحتوي على بيانات أحدث
+            if (cloudData.customers) window.appState.customers = cloudData.customers;
+            if (cloudData.products) window.appState.products = cloudData.products;
+
+            // حفظ النسخة المدمجة محلياً وإعادة رسم الشاشة
+            try {
+                localStorage.setItem('pot_products', JSON.stringify(window.appState.products));
+                localStorage.setItem('pot_customers', JSON.stringify(window.appState.customers));
+                localStorage.setItem('pot_sales', JSON.stringify(window.appState.sales));
+                localStorage.setItem('pot_expenses', JSON.stringify(window.appState.expenses));
+                localStorage.setItem('pot_collections', JSON.stringify(window.appState.collections));
+            } catch(e) {}
+
+            renderAllUI();
+        }
+
         async function syncDataWithFirebase(isBackground = true) {
             try {
                 const res = await fetch(getCleanFirebaseUrl('store_data'), { method: 'GET' });
                 if (res.ok) {
                     const data = await res.json();
                     if (data) {
-                        if (data.products) window.appState.products = data.products;
-                        if (data.customers) window.appState.customers = data.customers;
-                        if (data.sales) window.appState.sales = data.sales;
-                        if (data.expenses) window.appState.expenses = data.expenses;
-                        if (data.collections) window.appState.collections = data.collections;
+                        mergeWithCloudData(data);
                     } else {
                         await pushToFirebase();
                     }
                     updateStatusUI(true, "متصل سحابياً");
-                    renderAllUI();
                 } else {
-                    updateStatusUI(false, "وضع محلي");
+                    updateStatusUI(false, "وضع محلي (أوفلاين)");
                 }
             } catch (err) {
-                updateStatusUI(false, "وضع محلي (بدون انترنت)");
+                updateStatusUI(false, "وضع محلي (أوفلاين)");
             }
         }
 
@@ -1021,7 +1066,7 @@
                     body: JSON.stringify(payload)
                 });
             } catch (err) {
-                // Ignore background sync errors silently
+                // صامت تماماً عند عدم وجود إنترنت ليظل التطبيق سريعاً ودون أخطاء
             }
         }
 
