@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>البطاطس pos </title>
+    <title>السوري POS</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -96,7 +96,7 @@
 <body class="bg-gray-100 text-gray-800 min-h-screen flex flex-col antialiased selection:bg-potato-500 selection:text-white">
 
     <!-- ==================== LOGIN MODAL ==================== -->
-    <div id="login-modal" class="fixed inset-0 bg-gray-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div id="login-modal" class="fixed inset-0 bg-gray-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
         <div class="bg-white rounded-2xl max-w-md w-full p-8 shadow-2xl border border-gray-100 space-y-6">
             <div class="text-center">
                 <div class="w-16 h-16 bg-potato-600 text-white rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-lg shadow-potato-600/30 text-2xl">
@@ -131,7 +131,7 @@
                         <i class="fa-solid fa-store text-xl"></i>
                     </div>
                     <div>
-                        <h1 class="text-xl font-bold tracking-wide">متجر مبيعات البطاطس POS</h1>
+                        <h1 class="text-xl font-bold tracking-wide">السوري POS</h1>
                         <p class="text-xs text-potato-200">إدارة المبيعات بالكيلو والتحصيل اليومي</p>
                     </div>
                 </div>
@@ -857,6 +857,29 @@
                     weekday: 'long', year: 'numeric', month: 'short', day: 'numeric'
                 });
             }
+
+            // التحقق من حالة تسجيل الدخول المحفوظة مسبقاً
+            const savedUser = localStorage.getItem('pot_current_user');
+            if (savedUser) {
+                try {
+                    window.appState.currentUser = JSON.parse(savedUser);
+                    document.getElementById('login-modal').classList.add('hidden');
+                    const userDisplay = document.getElementById('logged-user-display');
+                    if (userDisplay) userDisplay.textContent = `المستخدم: ${window.appState.currentUser.username} (${window.appState.currentUser.role})`;
+                    
+                    renderAllUI();
+
+                    window.appState.autoSyncTimer = setInterval(() => {
+                        syncDataWithFirebase(true);
+                    }, 5000);
+                    syncDataWithFirebase(false);
+                } catch (err) {
+                    localStorage.removeItem('pot_current_user');
+                    document.getElementById('login-modal').classList.remove('hidden');
+                }
+            } else {
+                document.getElementById('login-modal').classList.remove('hidden');
+            }
         });
 
         window.handleLogin = function(e) {
@@ -875,6 +898,8 @@
             }
 
             window.appState.currentUser = { username: u, role: roleName };
+            localStorage.setItem('pot_current_user', JSON.stringify(window.appState.currentUser));
+
             const userDisplay = document.getElementById('logged-user-display');
             if (userDisplay) userDisplay.textContent = `المستخدم: ${u} (${roleName})`;
             
@@ -890,6 +915,7 @@
 
         window.logout = function() {
             window.appState.currentUser = null;
+            localStorage.removeItem('pot_current_user');
             if (window.appState.autoSyncTimer) clearInterval(window.appState.autoSyncTimer);
             document.getElementById('login-username').value = '';
             document.getElementById('login-password').value = '';
@@ -1067,7 +1093,6 @@
             const grid = document.getElementById('pos-products-grid');
             if (!grid) return;
             grid.innerHTML = window.appState.products.map(p => {
-                // الاحتفاظ بالقيمة الحالية للكمية إن وجدت أو استخدام 1 افتراضياً
                 const existingInput = document.getElementById(`qty-input-${p.id}`);
                 const currentVal = existingInput ? existingInput.value : "1";
 
